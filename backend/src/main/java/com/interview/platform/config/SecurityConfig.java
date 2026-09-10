@@ -13,6 +13,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.Arrays;
 
 @Configuration
 public class SecurityConfig {
@@ -69,12 +70,20 @@ public class SecurityConfig {
         CorsConfiguration configuration =
                 new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:5173",
-                "http://localhost:5174",
-                "http://localhost:5175",
-                "http://localhost:5176"
-        ));
+        String corsOrigins =
+                System.getenv("CORS_ALLOWED_ORIGINS");
+
+        if (corsOrigins == null || corsOrigins.isBlank()) {
+            corsOrigins =
+                    "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176";
+        }
+
+        configuration.setAllowedOrigins(
+                Arrays.stream(corsOrigins.split(","))
+                        .map(String::trim)
+                        .filter(origin -> !origin.isBlank())
+                        .toList()
+        );
 
         configuration.setAllowedMethods(List.of(
                 "GET",

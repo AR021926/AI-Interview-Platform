@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:8080";
+const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8080").replace(/\/$/, "");
 
 const authInputStyle = {
   width: "100%",
@@ -53,7 +53,7 @@ function App() {
   // =========================================================
 
   const [isLoggedIn, setIsLoggedIn] = useState(
-    Boolean(localStorage.getItem("userId"))
+    Boolean(localStorage.getItem("userId") && localStorage.getItem("token"))
   );
 
   const [authMode, setAuthMode] = useState("login");
@@ -206,6 +206,14 @@ function App() {
         );
       }
 
+      if (!data.token) {
+        throw new Error(
+          "Login succeeded but JWT token was not returned by the backend."
+        );
+      }
+
+      localStorage.setItem("token", data.token);
+
       localStorage.setItem(
         "userId",
         String(data.userId)
@@ -245,6 +253,7 @@ function App() {
   // =========================================================
 
   const handleLogout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("userId");
     localStorage.removeItem("userName");
     localStorage.removeItem("userEmail");
@@ -342,6 +351,24 @@ function App() {
   };
 
   // =========================================================
+  // JWT AUTHORIZATION
+  // =========================================================
+
+  const getAuthHeaders = (includeJson = false) => {
+    const token = localStorage.getItem("token");
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    if (includeJson) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    return headers;
+  };
+
+  // =========================================================
   // LOAD INTERVIEWS + PRACTICE QUESTIONS
   // =========================================================
 
@@ -374,7 +401,10 @@ function App() {
         const response = await fetch(
           `${API_URL}/api/interviews?userId=${encodeURIComponent(
             userId
-          )}`
+          )}`,
+          {
+            headers: getAuthHeaders(),
+          }
         );
 
         if (!response.ok) {
@@ -398,7 +428,10 @@ function App() {
         // =====================================================
 
         const questionResponse = await fetch(
-          `${API_URL}/api/questions`
+          `${API_URL}/api/questions`,
+          {
+            headers: getAuthHeaders(),
+          }
         );
 
         if (!questionResponse.ok) {
@@ -463,7 +496,10 @@ function App() {
       const response = await fetch(
         `${API_URL}/api/interviews?userId=${encodeURIComponent(
           userId
-        )}`
+        )}`,
+        {
+          headers: getAuthHeaders(),
+        }
       );
 
       if (!response.ok) {
@@ -516,7 +552,10 @@ function App() {
       }
 
       const response = await fetch(
-        `${API_URL}/api/questions/interview/${id}`
+        `${API_URL}/api/questions/interview/${id}`,
+        {
+          headers: getAuthHeaders(),
+        }
       );
 
       if (!response.ok) {
@@ -615,9 +654,7 @@ function App() {
         `${API_URL}/api/interviews`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(true),
           body: JSON.stringify({
             title: "Java Developer Interview",
             role: "Software Engineer",
@@ -683,6 +720,7 @@ function App() {
         `${API_URL}/api/interviews/${interviewId}`,
         {
           method: "DELETE",
+          headers: getAuthHeaders(),
         }
       );
 
@@ -736,7 +774,10 @@ function App() {
         await refreshInterviews();
 
       const response = await fetch(
-        `${API_URL}/api/interviews/${interviewId}/results`
+        `${API_URL}/api/interviews/${interviewId}/results`,
+        {
+          headers: getAuthHeaders(),
+        }
       );
 
       if (!response.ok) {
@@ -835,9 +876,7 @@ function App() {
         `${API_URL}/api/answers`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(true),
           body: JSON.stringify({
             answerText: answer,
             questionId: currentQuestion.id,
@@ -920,10 +959,7 @@ function App() {
             `${API_URL}/api/interviews/${currentInterviewId}/complete`,
             {
               method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
+              headers: getAuthHeaders(true),
               body: JSON.stringify({
                 questionIds:
                   selectedQuestionIds,
@@ -1104,68 +1140,66 @@ function App() {
 
   if (!isLoggedIn) {
     return (
-      <div className="app">
-        <main
-          style={{
-            minHeight: "100vh",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "30px",
-            position: "relative",
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              top: "25px",
-              right: "25px",
-            }}
-          >
+      <div className="app auth-page">
+        <main className="auth-shell">
+          <div className="auth-theme-toggle">
             <ThemeToggle />
           </div>
 
-          <section
-            style={{
-              width: "100%",
-              maxWidth: "420px",
-              padding: "35px",
-              borderRadius: "20px",
-              background:
-                "var(--auth-card-bg)",
-              border:
-                "1px solid var(--auth-card-border)",
-              color: "var(--auth-card-text)",
-              boxSizing: "border-box",
-            }}
-          >
-            <div
-              style={{
-                textAlign: "center",
-                marginBottom: "28px",
-              }}
-            >
+          <section className="auth-showcase">
+            <div>
+              <p className="eyebrow">TECHNICAL INTERVIEW PRACTICE</p>
+
+              <h1 className="auth-showcase-title">
+                Practice smarter.
+                <span> Interview with confidence.</span>
+              </h1>
+
+              <p className="auth-showcase-text">
+                Prepare with structured technical interviews, instant evaluation,
+                detailed feedback, and progress tracking across every attempt.
+              </p>
+            </div>
+
+            <div className="auth-feature-grid">
+              <div className="auth-feature-card">
+                <strong>5</strong>
+                <span>Focused questions per interview</span>
+              </div>
+
+              <div className="auth-feature-card">
+                <strong>AI</strong>
+                <span>Answer scoring and feedback</span>
+              </div>
+
+              <div className="auth-feature-card">
+                <strong>100</strong>
+                <span>Clear performance score</span>
+              </div>
+            </div>
+
+            <p className="auth-showcase-note">
+              Practice • Review • Improve
+            </p>
+          </section>
+
+          <section className="auth-card">
+            <div className="auth-card-heading">
               <div className="logo">
                 AI<span>Interview</span>
               </div>
 
-              <p
-                className="eyebrow"
-                style={{
-                  marginTop: "25px",
-                }}
-              >
-                AI-POWERED INTERVIEW
-                PLATFORM
+              <p className="eyebrow auth-eyebrow">
+                AI-POWERED INTERVIEW PLATFORM
               </p>
 
-              <h1>
+              <h1 className="auth-title">
                 {authMode === "login"
                   ? "Welcome Back"
                   : "Create Account"}
               </h1>
 
-              <p className="hero-text">
+              <p className="hero-text auth-subtitle">
                 {authMode === "login"
                   ? "Login to continue your interview practice."
                   : "Register to start your interview practice."}
@@ -1224,12 +1258,7 @@ function App() {
               )}
 
               {authError && (
-                <p
-                  style={{
-                    color: "var(--auth-error)",
-                    marginBottom: "15px",
-                  }}
-                >
+                <p className="auth-error">
                   {authError}
                 </p>
               )}
@@ -1248,12 +1277,7 @@ function App() {
               </button>
             </form>
 
-            <div
-              style={{
-                textAlign: "center",
-                marginTop: "20px",
-              }}
-            >
+            <div className="auth-switch">
               {authMode === "login" ? (
                 <p>
                   Don't have an account?{" "}
@@ -1289,7 +1313,6 @@ function App() {
       </div>
     );
   }
-
   // =========================================================
   // COMPLETED SCREEN
   // =========================================================
@@ -1761,6 +1784,32 @@ function App() {
       ? completedInterviews[0]
       : null;
 
+  const totalInterviews = sortedInterviews.length;
+
+  const completedInterviewCount =
+    completedInterviews.length;
+
+  const averageScore =
+    completedInterviews.length > 0
+      ? Math.round(
+          completedInterviews.reduce(
+            (sum, interview) =>
+              sum + (Number(interview.finalScore) || 0),
+            0
+          ) / completedInterviews.length
+        )
+      : 0;
+
+  const bestScore =
+    completedInterviews.length > 0
+      ? Math.max(
+          ...completedInterviews.map(
+            (interview) =>
+              Number(interview.finalScore) || 0
+          )
+        )
+      : 0;
+
   // =========================================================
   // DASHBOARD
   // =========================================================
@@ -1811,23 +1860,22 @@ function App() {
         >
           <div>
             <p className="eyebrow">
-              AI-POWERED INTERVIEW
-              PLATFORM
+              TECHNICAL INTERVIEW PRACTICE
             </p>
 
             <h1>
-              Practice interviews.
+              Build interview
               <br />
               <span>
-                Get job ready.
+                confidence.
               </span>
             </h1>
 
             <p className="hero-text">
-              Prepare for technical
-              interviews with AI-generated
-              questions, real-time practice
-              and detailed feedback.
+              Practice structured technical
+              interviews, review your answers,
+              and track your progress across
+              every attempt.
             </p>
 
             <button
@@ -1836,72 +1884,82 @@ function App() {
               disabled={loading}
             >
               {loading
-                ? "Loading..."
-                : "Start Interview"}
+                ? "Preparing..."
+                : "Start New Interview"}
             </button>
           </div>
 
           <div className="hero-card">
             <div className="status">
               <span></span>
-              Interview Ready
+              Ready for your next interview
             </div>
 
             <h3>
-              Java Backend Interview
+              Your Progress
             </h3>
 
             <p>
-              Software Engineer
+              A quick view of your interview
+              practice history.
             </p>
 
             <div className="card-line">
               <span>
-                Questions
+                Total Interviews
               </span>
 
-              <strong>5</strong>
+              <strong>
+                {totalInterviews}
+              </strong>
             </div>
 
             <div className="card-line">
               <span>
-                Status
+                Completed
               </span>
 
               <strong>
-                {lastCompletedInterview
-                  ? lastCompletedInterview.status
+                {completedInterviewCount}
+              </strong>
+            </div>
+
+            <div className="card-line">
+              <span>
+                Average Score
+              </span>
+
+              <strong>
+                {completedInterviewCount > 0
+                  ? `${averageScore} / 100`
+                  : "—"}
+              </strong>
+            </div>
+
+            <div className="card-line">
+              <span>
+                Latest Score
+              </span>
+
+              <strong>
+                {completedInterviewCount > 0
+                  ? `${lastCompletedInterview.finalScore} / 100`
                   : "—"}
               </strong>
             </div>
 
             {lastCompletedInterview && (
-              <>
-                <div className="card-line">
-                  <span>
-                    Final Score
-                  </span>
+              <div className="card-line">
+                <span>
+                  Last Completed
+                </span>
 
-                  <strong>
-                    {
-                      lastCompletedInterview.finalScore
-                    }{" "}
-                    / 100
-                  </strong>
-                </div>
-
-                <div className="card-line">
-                  <span>
-                    Date
-                  </span>
-
-                  <strong>
-                    {formatDateTime(
-                      lastCompletedInterview
-                    )}
-                  </strong>
-                </div>
-              </>
+                <strong>
+                  {formatDateTime(
+                    lastCompletedInterview
+                  )}
+                </strong>
+              </div>
             )}
           </div>
         </section>
@@ -1991,27 +2049,29 @@ function App() {
                       null &&
                       interview.finalScore !==
                         undefined && (
-                        <div className="interview-info">
+                        <div className="interview-info interview-score-info">
                           <span>
                             Final Score
                           </span>
 
-                          <strong>
-                            {
-                              interview.finalScore
-                            }{" "}
-                            / 100
-                          </strong>
+                          <div className="interview-score-value">
+                            <strong>
+                              {
+                                interview.finalScore
+                              }{" "}
+                              / 100
+                            </strong>
 
-                          <span
-                            className={`score-badge score-badge-small ${getScoreClass(
-                              interview.finalScore
-                            )}`}
-                          >
-                            {getScoreLabel(
-                              interview.finalScore
-                            )}
-                          </span>
+                            <span
+                              className={`score-badge score-badge-small ${getScoreClass(
+                                interview.finalScore
+                              )}`}
+                            >
+                              {getScoreLabel(
+                                interview.finalScore
+                              )}
+                            </span>
+                          </div>
                         </div>
                       )}
 

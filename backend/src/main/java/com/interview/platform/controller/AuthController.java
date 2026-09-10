@@ -13,7 +13,6 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:5173")
 public class AuthController {
 
     private final UserRepository userRepository;
@@ -74,11 +73,16 @@ public class AuthController {
         User savedUser =
                 userRepository.save(user);
 
+        String token =
+                jwtService.generateToken(savedUser.getEmail());
+
         return ResponseEntity.ok(Map.of(
                 "message", "Registration successful",
                 "userId", savedUser.getId(),
                 "name", savedUser.getName(),
                 "email", savedUser.getEmail()
+        ,
+                "token", token
         ));
     }
 
