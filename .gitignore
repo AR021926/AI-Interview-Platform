@@ -1,0 +1,32 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Backend local secrets
+backend/src/main/resources/application-local.yaml
+backend/src/main/resources/application-local.yml
+backend/src/main/resources/application-local.properties
+
+# Backend build
+backend/target/
+
+# Frontend dependencies/build
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary backend files
+backend/startup-error.txt
+backend/startup-error-new.txt

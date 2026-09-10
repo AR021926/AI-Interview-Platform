@@ -1,0 +1,5 @@
+﻿{
+  "questionText": "What is Spring Boot?",
+  "expectedAnswer": "Spring Boot is a framework for building Spring applications quickly with minimal configuration.",
+  "interviewId": 1
+}

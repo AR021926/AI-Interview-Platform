@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: platform
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/interview_platform?options=-c%20TimeZone%3DAsia%2FKolkata}
+    username: ${DB_USERNAME:interview_user}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Kolkata
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+  endpoint:
+    health:
+      show-details: always
+
+  health:
+    redis:
+      enabled: false
