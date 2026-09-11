@@ -700,6 +700,200 @@ public class InterviewController {
     // =========================================================
     // AUTHENTICATED USER FROM JWT
     // =========================================================
+    // =========================================================
+    // TERMINATE INTERVIEW
+    // =========================================================
+    @PostMapping("/{interviewId}/terminate")
+    @Transactional
+    public ResponseEntity<?> terminateInterview(
+            @PathVariable Long interviewId,
+            @RequestBody CompleteInterviewRequest request,
+            Principal principal
+    ) {
+
+        User authenticatedUser =
+                getAuthenticatedUser(principal);
+
+        if (authenticatedUser == null) {
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body("Authentication required.");
+        }
+
+        Optional<Interview> optionalInterview =
+                interviewRepository.findById(interviewId);
+
+        if (optionalInterview.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Interview interview =
+                optionalInterview.get();
+
+        if (!belongsToUser(
+                interview,
+                authenticatedUser
+        )) {
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(
+                            "You do not have permission to terminate this interview."
+                    );
+        }
+
+        if ("COMPLETED".equalsIgnoreCase(
+                interview.getStatus()
+        )) {
+            return ResponseEntity.ok(interview);
+        }
+
+        if (request == null
+                || request.questionIds() == null
+                || request.questionIds().size() != 5) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            "Exactly 5 question IDs are required."
+                    );
+        }
+
+        List<Long> questionIds =
+                request.questionIds()
+                        .stream()
+                        .distinct()
+                        .limit(5)
+                        .toList();
+
+        if (questionIds.size() != 5) {
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            "Exactly 5 unique question IDs are required."
+                    );
+        }
+
+        List<Answer> allAnswers =
+                answerRepository
+                        .findByQuestionInterviewId(
+                                interviewId
+                        );
+
+        Map<Long, Answer> latestAnswers =
+                allAnswers.stream()
+                        .filter(answer ->
+                                answer != null
+                        )
+                        .filter(answer ->
+                                answer.getQuestion() != null
+                        )
+                        .filter(answer ->
+                                answer.getQuestion().getId() != null
+                        )
+                        .filter(answer ->
+                                answer.getId() != null
+                        )
+                        .collect(
+                                Collectors.toMap(
+                                        answer ->
+                                                answer
+                                                        .getQuestion()
+                                                        .getId(),
+
+                                        Function.identity(),
+
+                                        (first, second) ->
+                                                first.getId()
+                                                        > second.getId()
+                                                        ? first
+                                                        : second
+                                )
+                        );
+
+        int totalScore = 0;
+
+        for (Long questionId : questionIds) {
+
+            Question question =
+                    questionRepository
+                            .findById(questionId)
+                            .orElse(null);
+
+            if (question == null
+                    || question.getInterview() == null
+                    || question.getInterview().getId() == null
+                    || !question
+                            .getInterview()
+                            .getId()
+                            .equals(interviewId)) {
+
+                return ResponseEntity
+                        .badRequest()
+                        .body(
+                                "Invalid interview question."
+                        );
+            }
+
+            Answer existing =
+                    latestAnswers.get(questionId);
+
+            if (existing != null) {
+
+                Integer score =
+                        existing.getScore();
+
+                if (score != null &&
+                        !isProcessing(existing)) {
+
+                    totalScore +=
+                            Math.max(
+                                    0,
+                                    Math.min(
+                                            100,
+                                            score
+                                    )
+                            );
+                }
+
+                continue;
+            }
+
+            Answer unanswered =
+                    new Answer(
+                            "Not answered",
+                            0,
+                            "This question was not answered because the interview was terminated.",
+                            question
+                    );
+
+            answerRepository.save(
+                    unanswered
+            );
+        }
+
+        int finalScore =
+                Math.round(
+                        (float) totalScore / 5
+                );
+
+        interview.setFinalScore(
+                finalScore
+        );
+
+        interview.setStatus(
+                "TERMINATED"
+        );
+
+        Interview savedInterview =
+                interviewRepository.save(
+                        interview
+                );
+
+        return ResponseEntity.ok(
+                savedInterview
+        );
+    }
+
     private User getAuthenticatedUser(
             Principal principal
     ) {

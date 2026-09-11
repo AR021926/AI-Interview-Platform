@@ -90,6 +90,7 @@ function App() {
     useState(0);
 
   const [answer, setAnswer] = useState("");
+  const [pasteWarning, setPasteWarning] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const [scores, setScores] = useState([]);
@@ -606,6 +607,7 @@ function App() {
 
       setCurrentQuestionIndex(0);
       setAnswer("");
+      setPasteWarning("");
 
       setScores([]);
       setEvaluations([]);
@@ -1006,6 +1008,7 @@ function App() {
         await refreshInterviews();
 
         setAnswer("");
+      setPasteWarning("");
         setStarted(false);
         setCompleted(true);
         setViewingResults(false);
@@ -1022,6 +1025,7 @@ function App() {
       );
 
       setAnswer("");
+      setPasteWarning("");
     } catch (err) {
       console.error(
         "Answer submission error:",
@@ -1117,6 +1121,101 @@ function App() {
   // RESET
   // =========================================================
 
+  const terminateCurrentInterview = async (
+    reason = "exit"
+  ) => {
+
+    const interviewId =
+      currentInterviewId;
+
+    const questionIds =
+      interviewQuestions
+        .map((question) => question.id)
+        .filter((id) => id != null)
+        .slice(0, 5);
+
+    console.log("TERMINATE REQUEST", {
+      reason,
+      interviewId,
+      questionIds,
+    });
+
+    setStarted(false);
+    setCompleted(false);
+    setViewingResults(false);
+
+    try {
+
+      if (
+        interviewId &&
+        questionIds.length === 5
+      ) {
+
+        const response =
+          await fetch(
+            `${API_URL}/api/interviews/${interviewId}/terminate`,
+            {
+              method: "POST",
+              headers: getAuthHeaders(true),
+              keepalive: true,
+              body: JSON.stringify({
+                questionIds,
+              }),
+            }
+          );
+
+        console.log(
+          "TERMINATE RESPONSE",
+          response.status
+        );
+        if (!response.ok) {
+
+          const errorText =
+            await response.text();
+
+          throw new Error(
+            `Termination failed. HTTP ${response.status}: ${errorText}`
+          );
+        }
+
+        await refreshInterviews();
+      }
+
+    } catch (error) {
+
+      console.error(
+        "Interview termination failed:",
+        error
+      );
+
+      alert(
+        "The interview could not be terminated correctly. Please refresh the dashboard."
+      );
+
+    } finally {
+
+      setCurrentInterviewId(null);
+      setCurrentQuestionIndex(0);
+
+      setAnswer("");
+      setPasteWarning("");
+
+      setScores([]);
+      setEvaluations([]);
+      setSavedResults([]);
+      setInterviewQuestions([]);
+
+      if (reason === "tab-switch") {
+
+        window.setTimeout(() => {
+          alert(
+            "Interview terminated because you switched tabs/windows or left the interview page. Unanswered questions received 0."
+          );
+        }, 100);
+      }
+    }
+  };
+
   const resetInterview = () => {
     setCompleted(false);
     setStarted(false);
@@ -1126,6 +1225,7 @@ function App() {
     setCurrentQuestionIndex(0);
 
     setAnswer("");
+      setPasteWarning("");
 
     setScores([]);
     setEvaluations([]);
@@ -1134,6 +1234,47 @@ function App() {
     setInterviewQuestions([]);
   };
 
+  // =========================================================
+  // INTERVIEW TAB VISIBILITY PROTECTION
+  // =========================================================
+
+  useEffect(() => {
+
+    const handleVisibilityChange = () => {
+
+      if (
+        started &&
+        !completed &&
+        document.hidden
+      ) {
+
+        console.log(
+          "INTERVIEW PAGE HIDDEN - TERMINATING"
+        );
+        terminateCurrentInterview(
+          "tab-switch"
+        );
+      }
+    };
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+    return () => {
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+    };
+
+  }, [
+    started,
+    completed,
+    currentInterviewId,
+    interviewQuestions
+  ]);
   // =========================================================
   // LOGIN / REGISTER SCREEN
   // =========================================================
@@ -1186,11 +1327,11 @@ function App() {
           <section className="auth-card">
             <div className="auth-card-heading">
               <div className="logo">
-                AI<span>Interview</span>
+                Interview<span>Lab</span>
               </div>
 
               <p className="eyebrow auth-eyebrow">
-                AI-POWERED INTERVIEW PLATFORM
+                TECHNICAL INTERVIEW WORKSPACE
               </p>
 
               <h1 className="auth-title">
@@ -1322,7 +1463,7 @@ function App() {
       <div className="app">
         <header className="navbar">
           <div className="logo">
-            AI<span>Interview</span>
+            Interview<span>Lab</span>
           </div>
 
           <div className="navbar-actions">
@@ -1344,7 +1485,7 @@ function App() {
             </p>
 
             <h1>
-              Great job! 🎉
+              Interview complete
             </h1>
 
             <p className="hero-text">
@@ -1454,7 +1595,7 @@ function App() {
               className="primary-button"
               onClick={resetInterview}
             >
-              Back to Dashboard
+              Exit Interview
             </button>
           </section>
         </main>
@@ -1481,7 +1622,7 @@ function App() {
       <div className="app results-page">
         <header className="navbar">
           <div className="logo">
-            AI<span>Interview</span>
+            Interview<span>Lab</span>
           </div>
 
           <div className="navbar-actions">
@@ -1491,7 +1632,7 @@ function App() {
               className="profile"
               onClick={resetInterview}
             >
-              Back to Dashboard
+              Exit Interview
             </button>
           </div>
         </header>
@@ -1513,7 +1654,7 @@ function App() {
             </p>
 
             <div className="results-date">
-              🕐{" "}
+              
               {formatDateTime(interview)}
             </div>
 
@@ -1648,11 +1789,15 @@ function App() {
               </h1>
 
               <button
-                className="primary-button"
-                onClick={resetInterview}
-              >
-                Back to Dashboard
-              </button>
+              className="profile"
+              onClick={() =>
+                terminateCurrentInterview(
+                  "exit"
+                )
+              }
+            >
+              Exit Interview
+            </button>
             </section>
           </main>
         </div>
@@ -1663,7 +1808,7 @@ function App() {
       <div className="app">
         <header className="navbar">
           <div className="logo">
-            AI<span>Interview</span>
+            Interview<span>Lab</span>
           </div>
 
           <div className="navbar-actions">
@@ -1672,10 +1817,12 @@ function App() {
             <button
               className="profile"
               onClick={() =>
-                setStarted(false)
+                terminateCurrentInterview(
+                  "exit"
+                )
               }
             >
-              Back to Dashboard
+              Exit Interview
             </button>
           </div>
         </header>
@@ -1695,6 +1842,14 @@ function App() {
               you would in a real interview.
             </p>
 
+            <div className="interview-rules">
+              <strong>Interview rules:</strong>
+              <span>Answer in your own words</span>
+              <span className="rule-separator">•</span>
+              <span>Paste disabled</span>
+              <span className="rule-separator">•</span>
+              <span>Leaving this tab ends the interview</span>
+            </div>
             <div className="question-card">
               <div className="question-number">
                 {currentQuestionIndex + 1}
@@ -1710,17 +1865,32 @@ function App() {
                   {currentQuestion.questionText}
                 </h2>
 
+                
+
                 <textarea
                   value={answer}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setAnswer(
                       event.target.value
-                    )
-                  }
+                    );
+                    setPasteWarning("");
+                  }}
+                  onPaste={(event) => {
+                    event.preventDefault();
+                    setPasteWarning(
+                      "Pasting is not allowed. Please type your answer in your own words."
+                    );
+                  }}
                   placeholder="Type your answer here..."
                   rows="8"
                   disabled={submitting}
                 />
+
+                {pasteWarning && (
+                  <div className="paste-warning">
+                    {pasteWarning}
+                  </div>
+                )}
 
                 <br />
 
@@ -1774,7 +1944,7 @@ function App() {
   const completedInterviews =
     sortedInterviews.filter(
       (interview) =>
-        interview.status === "COMPLETED" &&
+        (interview.status === "COMPLETED" || interview.status === "TERMINATED") &&
         interview.finalScore !== null &&
         interview.finalScore !== undefined
     );
@@ -1818,7 +1988,7 @@ function App() {
     <div className="app">
       <header className="navbar">
         <div className="logo">
-          AI<span>Interview</span>
+          Interview<span>Lab</span>
         </div>
 
         <nav>
@@ -2029,7 +2199,7 @@ function App() {
                     </p>
 
                     <div className="interview-date">
-                      🕐{" "}
+                      
                       {formatDateTime(
                         interview
                       )}
@@ -2078,8 +2248,7 @@ function App() {
                     <button
                       className="open-button"
                       onClick={() =>
-                        interview.status ===
-                        "COMPLETED"
+                        (interview.status === "COMPLETED" || interview.status === "TERMINATED")
                           ? viewInterviewResults(
                               interview.id
                             )
@@ -2088,8 +2257,8 @@ function App() {
                             )
                       }
                     >
-                      {interview.status ===
-                      "COMPLETED"
+                      {interview.status === "COMPLETED" ||
+                      interview.status === "TERMINATED"
                         ? "View Results →"
                         : "Open Interview →"}
                     </button>
@@ -2102,7 +2271,7 @@ function App() {
                         )
                       }
                     >
-                      🗑️ Delete
+                      Delete
                     </button>
                   </div>
                 )
@@ -2176,11 +2345,11 @@ function App() {
 
       <footer>
         <p>
-          © 2026 AI Interview Platform
+          © 2026 InterviewLab
         </p>
 
         <p>
-          Built with React + Spring Boot
+          React · Spring Boot · PostgreSQL
         </p>
       </footer>
     </div>

@@ -67,6 +67,15 @@ public class AIService {
                     candidateAnswer +
                     "\n\n" +
                     "Give a score from 0 to 100.\n" +
+                    "Use this scoring rubric strictly:\n" +
+                    "90-100 = technically correct and complete, covering nearly all essential concepts.\n" +
+                    "75-89 = mostly correct with only minor omissions.\n" +
+                    "50-74 = partially correct, with important concepts missing.\n" +
+                    "20-49 = weak answer with major missing concepts or misunderstandings.\n" +
+                    "0-19 = incorrect, meaningless, unrelated, or non-responsive.\n" +
+                    "Judge technical meaning and concept coverage, not grammar, wording style, or answer length.\n" +
+                    "A concise but technically correct answer can receive a high score.\n" +
+                    "Do not give a high score merely because the answer mentions Java or a few related terms.\n" +
                     "If the candidate only repeats or closely paraphrases the question instead of answering it, score 0.\n" +
                     "Do not award marks just because words from the question appear in the candidate answer.\n" +
                     "A meaningless or unrelated answer should receive 0 to 5.\n" +
@@ -159,6 +168,17 @@ public class AIService {
 
             int score =
                     extractScore(generatedText);
+            int conceptScore =
+                    calculateConceptCoverage(
+                            question,
+                            candidateAnswer
+                    );
+
+            score =
+                    calibrateGeminiScore(
+                            score,
+                            conceptScore
+                    );
 
             String feedback =
                     extractFeedback(generatedText);
@@ -304,7 +324,342 @@ public class AIService {
     // FALLBACK EVALUATION
     // =========================================================
 
-    private EvaluationResult fallbackEvaluation(
+        private int calculateConceptCoverage(
+            Question question,
+            String answerText
+    ) {
+
+        if (question == null ||
+                question.getExpectedAnswer() == null ||
+                question.getExpectedAnswer().isBlank() ||
+                answerText == null ||
+                answerText.isBlank()) {
+
+            return 0;
+        }
+
+        java.util.Set<String> expectedConcepts =
+                extractScoringConcepts(
+                        question.getExpectedAnswer()
+                );
+
+        java.util.Set<String> answerConcepts =
+                extractScoringConcepts(
+                        answerText
+                );
+
+        if (expectedConcepts.isEmpty()) {
+            return 0;
+        }
+
+        int matched = 0;
+
+        for (String expectedConcept :
+                expectedConcepts) {
+
+            if (containsMatchingConcept(
+                    answerConcepts,
+                    expectedConcept
+            )) {
+                matched++;
+            }
+        }
+
+        double coverage =
+                (double) matched /
+                        expectedConcepts.size();
+
+        return Math.max(
+                0,
+                Math.min(
+                        100,
+                        (int) Math.round(
+                                coverage * 100
+                        )
+                )
+        );
+    }
+
+    private int calibrateGeminiScore(
+            int aiScore,
+            int conceptScore
+    ) {
+
+        aiScore =
+                Math.max(
+                        0,
+                        Math.min(100, aiScore)
+                );
+
+        conceptScore =
+                Math.max(
+                        0,
+                        Math.min(100, conceptScore)
+                );
+
+        /*
+         * Very low concept coverage means Gemini must not
+         * return an unrealistically high mark.
+         */
+        if (conceptScore < 15) {
+            return Math.min(aiScore, 20);
+        }
+
+        if (conceptScore < 30) {
+            return Math.min(aiScore, 40);
+        }
+
+        if (conceptScore < 45) {
+            return Math.min(aiScore, 60);
+        }
+
+        /*
+         * Strong concept coverage protects concise correct
+         * answers from being scored too harshly.
+         */
+        if (conceptScore >= 70) {
+            return Math.max(aiScore, 85);
+        }
+
+        if (conceptScore >= 55) {
+            return Math.max(aiScore, 75);
+        }
+
+        return aiScore;
+    }
+
+    private int fallbackScoreFromCoverage(
+            int conceptScore
+    ) {
+
+        if (conceptScore >= 70) {
+            return 90;
+        }
+
+        if (conceptScore >= 55) {
+            return 80;
+        }
+
+        if (conceptScore >= 40) {
+            return 65;
+        }
+
+        if (conceptScore >= 25) {
+            return 45;
+        }
+
+        if (conceptScore >= 10) {
+            return 20;
+        }
+
+        return 5;
+    }
+
+    private java.util.Set<String> extractScoringConcepts(
+            String text
+    ) {
+
+        java.util.Set<String> result =
+                new java.util.HashSet<>();
+
+        if (text == null || text.isBlank()) {
+            return result;
+        }
+
+        String normalized =
+                normalizeText(text);
+
+        for (String raw :
+                normalized.split("\\s+")) {
+
+            String word =
+                    normalizeScoringWord(raw);
+
+            if (word.length() < 3) {
+                continue;
+            }
+
+            if (isScoringStopWord(word)) {
+                continue;
+            }
+
+            result.add(word);
+        }
+
+        return result;
+    }
+
+    private boolean containsMatchingConcept(
+            java.util.Set<String> answerConcepts,
+            String expectedConcept
+    ) {
+
+        if (answerConcepts.contains(expectedConcept)) {
+            return true;
+        }
+
+        for (String candidate : answerConcepts) {
+
+            if (candidate == null ||
+                    expectedConcept == null) {
+                continue;
+            }
+
+            if (candidate.length() < 4 ||
+                    expectedConcept.length() < 4) {
+                continue;
+            }
+
+            int distance =
+                    levenshteinDistance(
+                            candidate,
+                            expectedConcept
+                    );
+
+            int maxLength =
+                    Math.max(
+                            candidate.length(),
+                            expectedConcept.length()
+                    );
+
+            double similarity =
+                    1.0 -
+                            ((double) distance /
+                                    maxLength);
+
+            /*
+             * Allows small human spelling mistakes such as:
+             * encapsulation -> encapluation
+             * inheritance   -> inheratence
+             * polymorphism  -> polymorphysim
+             */
+            if (distance <= 2 &&
+                    similarity >= 0.72) {
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private int levenshteinDistance(
+            String first,
+            String second
+    ) {
+
+        int[] previous =
+                new int[second.length() + 1];
+
+        int[] current =
+                new int[second.length() + 1];
+
+        for (int j = 0;
+             j <= second.length();
+             j++) {
+
+            previous[j] = j;
+        }
+
+        for (int i = 1;
+             i <= first.length();
+             i++) {
+
+            current[0] = i;
+
+            for (int j = 1;
+                 j <= second.length();
+                 j++) {
+
+                int cost =
+                        first.charAt(i - 1) ==
+                                second.charAt(j - 1)
+                                ? 0
+                                : 1;
+
+                current[j] =
+                        Math.min(
+                                Math.min(
+                                        current[j - 1] + 1,
+                                        previous[j] + 1
+                                ),
+                                previous[j - 1] + cost
+                        );
+            }
+
+            int[] temp = previous;
+            previous = current;
+            current = temp;
+        }
+
+        return previous[second.length()];
+    }
+
+    private String normalizeScoringWord(
+            String word
+    ) {
+
+        if (word == null) {
+            return "";
+        }
+
+        String value =
+                word.toLowerCase().trim();
+
+        if (value.length() > 6 &&
+                value.endsWith("ing")) {
+
+            value =
+                    value.substring(
+                            0,
+                            value.length() - 3
+                    );
+        }
+
+        if (value.length() > 5 &&
+                value.endsWith("ed")) {
+
+            value =
+                    value.substring(
+                            0,
+                            value.length() - 2
+                    );
+        }
+
+        if (value.length() > 5 &&
+                value.endsWith("s") &&
+                !value.endsWith("ss")) {
+
+            value =
+                    value.substring(
+                            0,
+                            value.length() - 1
+                    );
+        }
+
+        return value;
+    }
+
+    private boolean isScoringStopWord(
+            String word
+    ) {
+
+        String stopWords =
+                "a an the and or but is are was were be been being " +
+                "to of in on at for from by with as this that these those " +
+                "it its into which what who how when while than then " +
+                "can could would should will may might " +
+                "use used using provides provide provided required " +
+                "allows allow include includes including main generally four pillar pillars";
+
+        return java.util.Arrays
+                .asList(
+                        stopWords.split("\\s+")
+                )
+                .contains(word);
+    }
+
+private EvaluationResult fallbackEvaluation(
             Question question,
             String answerText
     ) {
@@ -318,58 +673,16 @@ public class AIService {
             );
         }
 
-        String answer =
-                answerText.trim().toLowerCase();
+        int score =
+                calculateConceptCoverage(
+                        question,
+                        answerText
+                );
 
-        String expected =
-                question != null &&
-                        question.getExpectedAnswer() != null
-                        ? question.getExpectedAnswer().toLowerCase()
-                        : "";
-
-        int score = 50;
-
-        if (!expected.isBlank()) {
-
-            String[] keywords =
-                    expected.split("\\s+");
-
-            int matched = 0;
-            int totalKeywords = 0;
-
-            for (String keyword : keywords) {
-
-                String clean =
-                        keyword.replaceAll(
-                                "[^a-zA-Z0-9]",
-                                ""
-                        );
-
-                if (clean.length() < 4) {
-                    continue;
-                }
-
-                totalKeywords++;
-
-                if (answer.contains(clean)) {
-                    matched++;
-                }
-            }
-
-            if (totalKeywords > 0) {
-
-                double percentage =
-                        ((double) matched /
-                                totalKeywords) * 100;
-
-                score =
-                        (int) Math.round(percentage);
-
-                if (score > 100) {
-                    score = 100;
-                }
-            }
-        }
+        score =
+                fallbackScoreFromCoverage(
+                        score
+                );
 
         String feedback;
 
