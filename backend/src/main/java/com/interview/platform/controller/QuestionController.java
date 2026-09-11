@@ -55,7 +55,7 @@ public class QuestionController {
     @GetMapping
     public List<Question> getPracticeQuestions() {
 
-        return questionRepository.findByInterviewIsNull()
+        return questionRepository.findAll()
                 .stream()
                 .limit(10)
                 .toList();

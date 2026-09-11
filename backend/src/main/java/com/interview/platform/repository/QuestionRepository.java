@@ -10,8 +10,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     List<Question> findByInterviewId(Long interviewId);
 
-    List<Question> findByInterviewIsNull();
-
     @Query(value = """
             SELECT *
             FROM questions

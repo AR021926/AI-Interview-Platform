@@ -77,7 +77,7 @@ public class InterviewController {
          * newly created interview.
          */
         List<Question> existingQuestions =
-                questionRepository.findByInterviewIsNull();
+                questionRepository.findAll();
 
         existingQuestions.stream()
                 .limit(10)
