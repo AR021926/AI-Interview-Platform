@@ -79,7 +79,7 @@ public class SecurityConfig {
         }
 
         configuration.setAllowedOrigins(
-                Arrays.stream(corsOrigins.split(","))
+                Arrays.stream((corsOrigins + ",https://interviewlab-lj4p.onrender.com").split(","))
                         .map(String::trim)
                         .filter(origin -> !origin.isBlank())
                         .toList()
