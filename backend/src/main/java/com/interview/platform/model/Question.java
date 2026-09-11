@@ -18,7 +18,7 @@ public class Question {
     private String expectedAnswer;
 
     @ManyToOne
-    @JoinColumn(name = "interview_id", nullable = false)
+    @JoinColumn(name = "interview_id", nullable = true)
     private Interview interview;
 
     public Question() {
