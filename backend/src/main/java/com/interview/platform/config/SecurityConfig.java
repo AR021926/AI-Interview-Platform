@@ -1,4 +1,4 @@
-package com.interview.platform.config;
+﻿package com.interview.platform.config;
 
 import com.interview.platform.security.JwtAuthenticationFilter;
 
@@ -32,7 +32,7 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
-                .cors(cors -> {})
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
 
                 .sessionManagement(session ->
